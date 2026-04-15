@@ -108,6 +108,9 @@ defmodule EInk.Driver.UC8253C do
     SpiDriver.write(state.driver, 0x17, <<0xA5>>)
     :ok = SpiDriver.wait_for_busy(state.driver, polarity: :active_low)
 
+    # Update reference buffer for partial updates
+    SpiDriver.write(state.driver, 0x10, image)
+
     {:ok, %{state | boot_flag: true}}
   end
 

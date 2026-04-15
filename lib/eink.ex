@@ -30,6 +30,10 @@ defmodule EInk do
     GenServer.call(__MODULE__, :wake)
   end
 
+  def capabilities() do
+    GenServer.call(__MODULE__, :capabilities)
+  end
+
   # GenServer Callbacks
 
   @impl true
@@ -59,24 +63,54 @@ defmodule EInk do
   end
 
   @impl true
-  def handle_call({:draw, image, opts}, _from, state) do
-    {:ok, driver_state} = state.driver_mod.draw(state.driver_state, image, opts)
+  def handle_call({:draw, drawable, opts}, _from, state) do
+    # Polymorphic transformation into a hardware-ready binary
+    binary_data = EInk.Drawable.to_binary(drawable, state, opts)
+
+    # Ensure width/height are in opts for driver consumption
+    opts = 
+      opts
+      |> Keyword.put_new(:width, state.width)
+      |> Keyword.put_new(:height, state.height)
+
+    {:ok, driver_state} = state.driver_mod.draw(state.driver_state, binary_data, opts)
     {:reply, :ok, %{state | driver_state: driver_state}}
   end
 
   @impl true
   def handle_call({:clear, color, opts}, _from, state) do
     num_pixels = state.width * state.height
-    num_bytes = div(num_pixels, 8)
+
+    {num_bytes, white_byte, black_byte} =
+      case state.palette do
+        :bw ->
+          {div(num_pixels, 8), 0xFF, 0x00}
+
+        :grayscale2 ->
+          # 2 bits per pixel, 4 pixels per byte.
+          # White is 3 (11), Black is 0 (00).
+          # 0xFF is 11111111 (4 white pixels), 0x00 is 00000000 (4 black pixels).
+          {div(num_pixels, 4), 0xFF, 0x00}
+
+        _ ->
+          {div(num_pixels, 8), 0xFF, 0x00}
+      end
 
     data =
       case color do
-        :white -> :binary.copy(<<0xFF>>, num_bytes)
-        :black -> :binary.copy(<<0x00>>, num_bytes)
+        :white -> :binary.copy(<<white_byte>>, num_bytes)
+        :black -> :binary.copy(<<black_byte>>, num_bytes)
         other -> raise "Invalid color `#{other}`. Supported colors are `:white` and `:black`"
       end
 
-    Logger.debug("Clearing screen to #{color}")
+    Logger.debug("Clearing screen to #{color} using #{state.palette} palette")
+
+    # Ensure width/height are in opts for driver consumption
+    opts =
+      opts
+      |> Keyword.put_new(:width, state.width)
+      |> Keyword.put_new(:height, state.height)
+
     {:ok, driver_state} = state.driver_mod.draw(state.driver_state, data, opts)
     {:reply, :ok, %{state | driver_state: driver_state}}
   end
@@ -91,6 +125,11 @@ defmodule EInk do
   def handle_call(:wake, _from, state) do
     {:ok, driver_state} = state.driver_mod.wake(state.driver_state)
     {:reply, :ok, %{state | driver_state: driver_state}}
+  end
+
+  @impl true
+  def handle_call(:capabilities, _from, state) do
+    {:reply, %{width: state.width, height: state.height, palette: state.palette}, state}
   end
 
   @impl true

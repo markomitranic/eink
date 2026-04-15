@@ -100,8 +100,8 @@ defmodule EInk.Driver.UC8276 do
 
     # Resolution setting
     # e.g. 400x300 is <<0x01, 0x90, 0x01, 0x2C>>
-    # w_high, w_low, h_high, h_low
-    SpiDriver.write(state.driver, 0x61, <<Bitwise.bsr(width, 8), Bitwise.band(width, 0xFF), Bitwise.bsr(height, 8), Bitwise.band(height, 0xFF)>>)
+    # width_high, width_low, height_high, height_low
+    SpiDriver.write(state.driver, 0x61, <<width::big-unsigned-16, height::big-unsigned-16>>)
 
     # VCOM DC voltage setting
     SpiDriver.write(state.driver, 0x82, <<0x05>>)
@@ -136,6 +136,9 @@ defmodule EInk.Driver.UC8276 do
 
     SpiDriver.write(state.driver, 0x17, <<0xA5>>)
     SpiDriver.wait_for_busy(state.driver)
+
+    # Update reference buffer for partial updates
+    SpiDriver.write(state.driver, 0x10, image)
 
     {:ok, %{state | current_lut: use_lut}}
   end
