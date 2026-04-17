@@ -23,9 +23,9 @@ defmodule EInk.Packer do
     for <<pixel::8 <- pixels>>, into: <<>> do
       val =
         cond do
-          pixel >= 200 -> 3
-          pixel >= 120 -> 2
-          pixel >= 60 -> 1
+          pixel >= 213 -> 3
+          pixel >= 128 -> 2
+          pixel >= 42 -> 1
           true -> 0
         end
 

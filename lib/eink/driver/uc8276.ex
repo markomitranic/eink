@@ -60,7 +60,7 @@ defmodule EInk.Driver.UC8276 do
   def new(opts \\ []) do
     spi_driver = SpiDriver.open(opts)
 
-    {:ok, %{driver: spi_driver, current_lut: nil}}
+    {:ok, %{driver: spi_driver, current_lut: nil, border_flag: false}}
   end
 
   @impl EInk.Driver
@@ -118,16 +118,25 @@ defmodule EInk.Driver.UC8276 do
     # Temperature sensor enabled, calibration offset 0
     SpiDriver.write(state.driver, 0x41, <<0x00>>)
 
-    {:ok, state}
+    # Initialize Old Data buffer to white (0xFF) to match manufacturer strategy
+    white_fill = :binary.copy(<<0xFF>>, div(width * height, 8))
+    SpiDriver.write(state.driver, 0x10, white_fill)
+
+    {:ok, %{state | border_flag: false}}
   end
 
   @impl EInk.Driver
   def draw(state, image, opts \\ []) do
     if state.driver.debug, do: Logger.debug("UC8276 draw")
 
-    SpiDriver.write(state.driver, 0x13, image)
-
     use_lut = Keyword.get(opts, :refresh_type, :full)
+    border_flag = Keyword.get(opts, :border_flag, state.border_flag)
+
+    # Partial updates always use 0xD7. Full updates use 0xD7 if border_flag is set, else 0x97.
+    border_data = if use_lut == :partial or border_flag, do: 0xD7, else: 0x97
+    SpiDriver.write(state.driver, 0x50, <<border_data>>)
+
+    # SpiDriver.write(state.driver, 0x13, image)
 
     cond do
       state.current_lut == use_lut -> :ok
@@ -140,7 +149,7 @@ defmodule EInk.Driver.UC8276 do
     # Update reference buffer for partial updates
     SpiDriver.write(state.driver, 0x10, image)
 
-    {:ok, %{state | current_lut: use_lut}}
+    {:ok, %{state | current_lut: use_lut, border_flag: border_flag}}
   end
 
   @impl EInk.Driver
