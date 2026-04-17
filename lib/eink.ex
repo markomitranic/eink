@@ -57,57 +57,72 @@ defmodule EInk do
 
     # Initialize the hardware
     {:ok, driver_state} = driver_mod.reset(driver_state)
-    {:ok, driver_state} = driver_mod.init(driver_state, config)
+    
+    init_opts = Keyword.merge(config, driver_config)
+    {:ok, driver_state} = driver_mod.init(driver_state, init_opts)
 
     {:ok, %{state | driver_state: driver_state}}
   end
 
   @impl true
-  def handle_call({:draw, drawable, opts}, _from, state) do
-    # Polymorphic transformation into a hardware-ready binary
-    binary_data = EInk.Drawable.to_binary(drawable, state, opts)
+  def handle_call({:draw, image, opts}, _from, state) do
+    # Resolve mode: default to :full
+    mode = Keyword.get(opts, :mode, :full)
 
-    # Ensure width/height are in opts for driver consumption
-    opts = 
+    # Preprocess image into binary or %Dither{}
+    processed =
+      case image do
+        binary when is_binary(binary) ->
+          binary
+
+        {:file, path} ->
+          path
+          |> Dither.load!()
+          |> preprocess_dither(state)
+
+        %Dither{} = dither ->
+          preprocess_dither(dither, state)
+
+        other ->
+          raise "Unsupported image type for EInk.draw: #{inspect(other)}"
+      end
+
+    # Pass mode, width, height to driver
+    opts =
       opts
+      |> Keyword.put(:mode, mode)
       |> Keyword.put_new(:width, state.width)
       |> Keyword.put_new(:height, state.height)
 
-    {:ok, driver_state} = state.driver_mod.draw(state.driver_state, binary_data, opts)
+    {:ok, driver_state} = state.driver_mod.draw(state.driver_state, processed, opts)
     {:reply, :ok, %{state | driver_state: driver_state}}
   end
 
   @impl true
   def handle_call({:clear, color, opts}, _from, state) do
+    mode = Keyword.get(opts, :mode, :full)
     num_pixels = state.width * state.height
 
-    {num_bytes, white_byte, black_byte} =
-      case state.palette do
-        :bw ->
-          {div(num_pixels, 8), 0xFF, 0x00}
-
-        :grayscale2 ->
-          # 2 bits per pixel, 4 pixels per byte.
-          # White is 3 (11), Black is 0 (00).
-          # 0xFF is 11111111 (4 white pixels), 0x00 is 00000000 (4 black pixels).
-          {div(num_pixels, 4), 0xFF, 0x00}
+    # For clear, we generate raw binaries based on mode
+    data =
+      case mode do
+        :grayscale ->
+          # For grayscale, we return a %Dither{} struct so the driver/utils can handle planar mapping
+          val = if color == :white, do: 255, else: 0
+          raw = :binary.copy(<<val>>, num_pixels)
+          Dither.from_raw!(raw, state.width, state.height)
 
         _ ->
-          {div(num_pixels, 8), 0xFF, 0x00}
+          num_bytes = div(num_pixels, 8)
+          byte = if color == :white, do: 0xFF, else: 0x00
+          :binary.copy(<<byte>>, num_bytes)
       end
 
-    data =
-      case color do
-        :white -> :binary.copy(<<white_byte>>, num_bytes)
-        :black -> :binary.copy(<<black_byte>>, num_bytes)
-        other -> raise "Invalid color `#{other}`. Supported colors are `:white` and `:black`"
-      end
+    Logger.debug("Clearing screen to #{color} using #{mode} mode")
 
-    Logger.debug("Clearing screen to #{color} using #{state.palette} palette")
-
-    # Ensure width/height are in opts for driver consumption
     opts =
       opts
+      |> Keyword.put(:mode, mode)
       |> Keyword.put_new(:width, state.width)
       |> Keyword.put_new(:height, state.height)
 
@@ -130,6 +145,12 @@ defmodule EInk do
   @impl true
   def handle_call(:capabilities, _from, state) do
     {:reply, %{width: state.width, height: state.height, palette: state.palette}, state}
+  end
+
+  defp preprocess_dither(dither, state) do
+    dither
+    |> Dither.resize!(state.width, state.height)
+    |> Dither.grayscale!()
   end
 
   @impl true
