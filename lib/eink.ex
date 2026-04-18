@@ -61,7 +61,7 @@ defmodule EInk do
 
     # Initialize the hardware
     {:ok, driver_state} = driver_mod.reset(driver_state)
-    
+
     init_opts = Keyword.merge(config, driver_config)
     {:ok, driver_state} = driver_mod.init(driver_state, init_opts)
 
@@ -121,13 +121,10 @@ defmodule EInk do
     data =
       case mode do
         :grayscale ->
-          # For grayscale, we return a %Dither{} struct so the driver/utils can handle planar mapping
+          # For grayscale, we return a %Dither{} struct so the driver/utils can handle the mapping
           val = if color == :white, do: 255, else: 0
           raw = :binary.copy(<<val>>, num_pixels)
           Dither.from_raw!(raw, state.width, state.height)
-          # We don't apply orientation to clear for now as per previous instruction refinement,
-          # but we need to pass opts for dither control if to_packed_binary is called eventually.
-          # (Actually to_packed_binary is called in the driver)
 
         _ ->
           num_bytes = div(num_pixels, 8)
@@ -165,18 +162,18 @@ defmodule EInk do
   end
 
   defp preprocess_dither(dither, state, opts) do
-    dither =
-      dither
-      |> Dither.resize!(state.width, state.height)
-      |> Dither.grayscale!()
-
     orientation = Keyword.get(opts, :orientation, state.orientation)
 
-    if orientation != 0 do
-      Dither.rotate!(dither, orientation)
-    else
-      dither
-    end
+    dither
+    |> maybe_rotate(orientation)
+    |> Dither.resize!(state.width, state.height)
+    |> Dither.grayscale!()
+  end
+
+  defp maybe_rotate(dither, 0), do: dither
+
+  defp maybe_rotate(dither, orientation) when orientation in [90, 180, 270] do
+    Dither.rotate!(dither, orientation)
   end
 
   @impl true
@@ -184,6 +181,7 @@ defmodule EInk do
     if state.driver_mod && state.driver_state do
       state.driver_mod.close(state.driver_state)
     end
+
     :ok
   end
 end
