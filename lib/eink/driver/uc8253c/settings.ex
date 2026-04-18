@@ -1,8 +1,12 @@
 defmodule EInk.Driver.UC8253C.Settings do
   @behaviour EInk.Driver.Settings
 
+  @resolution {340, 280}
+
   @impl true
-  def get_init(_mode, {width, height}) do
+  def get_init(mode, @resolution) when mode in [:full, :fast] do
+    raise "TODO: fix resolution"
+
     [
       {0x00, <<0xF3, 0x01>>},
       {0x01, <<0x03, 0x10, 0x3F, 0x3F, 0x03>>},
@@ -10,14 +14,18 @@ defmodule EInk.Driver.UC8253C.Settings do
       {0x60, <<0x22>>},
       {0x82, <<0x00>>},
       {0x30, <<0x09>>},
-      {0x61, <<width::big-unsigned-16, height::big-unsigned-16>>},
+      # {0x61, <<width::big-unsigned-16, height::big-unsigned-16>>},
       {0xE3, <<0x88>>},
       {0x50, <<0xB7>>}
     ]
   end
 
+  def get_init(mode, resolution) do
+    raise "[#{__MODULE__}] Mode `#{inspect(mode)}` is not supported for resolution #{inspect(resolution)}"
+  end
+
   @impl true
-  def get_lut(:full, _res) do
+  def get_lut(:full, @resolution) do
     [
       {0x20, <<0x01, 0x0F, 0x0F, 0x0F, 0x01, 0x01, 0x01>> <> :binary.copy(<<0x00>>, 35)},
       {0x21, <<0x01, 0x4F, 0x8F, 0x0F, 0x01, 0x01, 0x01>> <> :binary.copy(<<0x00>>, 35)},
@@ -27,7 +35,7 @@ defmodule EInk.Driver.UC8253C.Settings do
     ]
   end
 
-  def get_lut(:fast, _res) do
+  def get_lut(:fast, @resolution) do
     [
       {0x20, <<0x01, 0x0F, 0x01, 0x00, 0x00, 0x01, 0x01>> <> :binary.copy(<<0x00>>, 35)},
       {0x21, <<0x01, 0x0F, 0x01, 0x00, 0x00, 0x01, 0x01>> <> :binary.copy(<<0x00>>, 35)},
@@ -37,5 +45,7 @@ defmodule EInk.Driver.UC8253C.Settings do
     ]
   end
 
-  def get_lut(_mode, _res), do: nil
+  def get_lut(mode, resolution) do
+    raise "[#{__MODULE__}] Mode `#{inspect(mode)}` is not supported for resolution #{inspect(resolution)}"
+  end
 end

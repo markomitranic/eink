@@ -2,9 +2,9 @@ defmodule EInk.Driver.UC8276.Settings do
   @behaviour EInk.Driver.Settings
 
   @impl true
-  def get_init(:grayscale, _resolution), do: []
+  def get_init(:grayscale, {400, 300}), do: []
 
-  def get_init(_mode, {400, 300}) do
+  def get_init(mode, {400, 300}) when mode in [:full, :fast] do
     [
       {0x00, <<0x3F, 0x4D>>},
       {0x01, <<0x03, 0x10, 0x3F, 0x3F, 0x03>>},
@@ -17,6 +17,10 @@ defmodule EInk.Driver.UC8276.Settings do
       {0xE3, <<0x88>>},
       {0x41, <<0x00>>}
     ]
+  end
+
+  def get_init(mode, resolution) do
+    raise "[#{__MODULE__}] Mode `#{inspect(mode)}` is not supported for resolution #{inspect(resolution)}"
   end
 
   @impl true
@@ -40,5 +44,7 @@ defmodule EInk.Driver.UC8276.Settings do
     ]
   end
 
-  def get_lut(_mode, _res), do: []
+  def get_lut(mode, resolution) do
+    raise "[#{__MODULE__}] Mode `#{inspect(mode)}` is not supported for resolution #{inspect(resolution)}"
+  end
 end

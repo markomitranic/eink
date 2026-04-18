@@ -14,7 +14,8 @@ defmodule EInk.Driver.UC8253C do
   def new(opts \\ []) do
     spi_driver = SpiDriver.open(opts)
 
-    {:ok, %{driver: spi_driver, boot_flag: false, lut_flag: 0, current_lut: nil, current_mode: nil}}
+    {:ok,
+     %{driver: spi_driver, boot_flag: false, lut_flag: 0, current_lut: nil, current_mode: nil}}
   end
 
   @impl EInk.Driver
@@ -61,7 +62,7 @@ defmodule EInk.Driver.UC8253C do
     if state.driver.debug, do: Logger.debug("UC8253C draw mode: #{mode}")
 
     # Pre-process data
-    data = 
+    data =
       case image do
         %Dither{} = dither -> EInk.Utils.to_packed_binary(dither, mode)
         binary when is_binary(binary) -> binary
@@ -99,9 +100,11 @@ defmodule EInk.Driver.UC8253C do
 
   defp apply_init(state, mode, resolution) do
     commands = Settings.get_init(mode, resolution)
+
     for {reg, data} <- commands do
       SpiDriver.write(state.driver, reg, data)
     end
+
     %{state | current_mode: mode, current_lut: nil}
   end
 
@@ -110,7 +113,7 @@ defmodule EInk.Driver.UC8253C do
 
     if lut_data do
       lut_map = Map.new(lut_data)
-      
+
       SpiDriver.write(state.driver, 0x20, lut_map[0x20])
       SpiDriver.write(state.driver, 0x21, lut_map[0x21])
       SpiDriver.write(state.driver, 0x24, lut_map[0x24])

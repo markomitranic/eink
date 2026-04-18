@@ -1,6 +1,6 @@
 defmodule EInk.Driver.UC8179 do
   @moduledoc """
-  Unified driver for UC8179 e-ink displays.
+  Driver for UC8179 e-ink displays.
   """
   use EInk.Driver
 
@@ -24,7 +24,7 @@ defmodule EInk.Driver.UC8179 do
 
   @impl EInk.Driver
   def reset(state) do
-    if state.driver.debug, do: Logger.debug("UC8179 unified hardware reset")
+    if state.driver.debug, do: Logger.debug("UC8179 hardware reset")
 
     :ok = GPIO.write(state.driver.reset, 1)
     Process.sleep(10)
@@ -135,7 +135,7 @@ defmodule EInk.Driver.UC8179 do
 
   @impl EInk.Driver
   def sleep(state) do
-    if state.driver.debug, do: Logger.debug("UC8179 unified sleep")
+    if state.driver.debug, do: Logger.debug("UC8179 sleep")
 
     SpiDriver.write(state.driver, 0x07, <<0xA5>>)
     {:ok, state}
@@ -143,7 +143,7 @@ defmodule EInk.Driver.UC8179 do
 
   @impl EInk.Driver
   def wake(state) do
-    if state.driver.debug, do: Logger.debug("UC8179 unified wake")
+    if state.driver.debug, do: Logger.debug("UC8179 wake")
 
     {:ok, state} = reset(state)
     {:ok, state}

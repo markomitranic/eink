@@ -2,7 +2,7 @@ defmodule EInk.Driver.UC8179.Settings do
   @behaviour EInk.Driver.Settings
 
   @impl true
-  def get_init(_mode, {648, 480}) do
+  def get_init(mode, {648, 480}) when mode in [:full, :fast] do
     [
       {0x00, <<0x3F, 0x09>>},
       {0x01, <<0x03, 0x17, 0x3F, 0x3F, 0x03>>},
@@ -18,7 +18,7 @@ defmodule EInk.Driver.UC8179.Settings do
     ]
   end
 
-  def get_init(_mode, {800, 480}) do
+  def get_init(mode, {800, 480}) when mode in [:full, :fast] do
     [
       {0x00, <<0x3F, 0x0D>>},
       {0x01, <<0x03, 0x17, 0x3F, 0x3F, 0x03>>},
@@ -33,6 +33,9 @@ defmodule EInk.Driver.UC8179.Settings do
       {0xE3, <<0x88>>}
     ]
   end
+
+  def get_init(mode, res),
+    do: raise("Mode `#{inspect(mode)}` is not supported for resolution: #{inspect(res)}")
 
   @impl true
   def get_lut(:full, {648, 480}) do
@@ -75,5 +78,6 @@ defmodule EInk.Driver.UC8179.Settings do
     ]
   end
 
-  def get_lut(_mode, _res), do: nil
+  def get_lut(mode, res),
+    do: raise("Mode `#{inspect(mode)}` is not supported for resolution: #{inspect(res)}")
 end
