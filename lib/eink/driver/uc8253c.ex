@@ -14,8 +14,7 @@ defmodule EInk.Driver.UC8253C do
   def new(opts \\ []) do
     spi_driver = SpiDriver.open(opts)
 
-    {:ok,
-     %{driver: spi_driver, boot_flag: false, lut_flag: 0, current_lut: nil, current_mode: nil}}
+    {:ok, %{driver: spi_driver, active_state: nil, active_lut_reg: :reg_0x22}}
   end
 
   @impl EInk.Driver
@@ -34,7 +33,7 @@ defmodule EInk.Driver.UC8253C do
     :ok = GPIO.write(state.driver.reset, 1)
     Process.sleep(100)
 
-    {:ok, %{state | boot_flag: false, lut_flag: 0, current_lut: nil, current_mode: nil}}
+    {:ok, %{state | active_state: nil, active_lut_reg: :reg_0x22}}
   end
 
   @impl EInk.Driver
@@ -44,7 +43,7 @@ defmodule EInk.Driver.UC8253C do
 
     if state.driver.debug, do: Logger.debug("UC8253C init")
 
-    state = apply_init(state, :full, {width, height})
+    state = ensure_state(state, :full, {width, height})
 
     # Clear buffer 0x10
     SpiDriver.write(state.driver, 0x10, :binary.copy(<<0xFF>>, div(width * height, 8)))
@@ -68,24 +67,26 @@ defmodule EInk.Driver.UC8253C do
         binary when is_binary(binary) -> binary
       end
 
-    # Check for mode change
-    state = if state.current_mode != mode, do: apply_init(state, mode, res), else: state
+    # Ensure chip is in the correct mode/LUT state
+    previous_state = state.active_state
+    state = ensure_state(state, mode, res)
 
-    if state.boot_flag do
+    # Specific UC8253C logic for subsequent refreshes (boot_flag equivalent)
+    if previous_state != nil do
       SpiDriver.write(state.driver, 0x50, <<0xD7>>)
     end
 
     case mode do
       :grayscale ->
-        {buf10, buf13} = data
-        SpiDriver.write(state.driver, 0x10, buf10)
-        SpiDriver.write(state.driver, 0x13, buf13)
+        draw_grayscale(state, data, opts)
 
-      _bw ->
-        SpiDriver.write(state.driver, 0x13, data)
+      _bw_mode ->
+        draw_bw(state, data, mode, opts)
     end
+  end
 
-    state = if state.current_lut != mode, do: load_lut(state, mode, res), else: state
+  defp draw_bw(state, data, mode, _opts) do
+    SpiDriver.write(state.driver, 0x13, data)
 
     SpiDriver.write(state.driver, 0x17, <<0xA5>>)
     :ok = SpiDriver.wait_for_busy(state.driver, polarity: :active_low)
@@ -95,20 +96,48 @@ defmodule EInk.Driver.UC8253C do
       SpiDriver.write(state.driver, 0x10, data)
     end
 
-    {:ok, %{state | boot_flag: true}}
+    {:ok, state}
   end
 
-  defp apply_init(state, mode, resolution) do
-    commands = Settings.get_init(mode, resolution)
+  defp draw_grayscale(state, {buf10, buf13}, _opts) do
+    SpiDriver.write(state.driver, 0x10, buf10)
+    SpiDriver.write(state.driver, 0x13, buf13)
 
+    SpiDriver.write(state.driver, 0x17, <<0xA5>>)
+    :ok = SpiDriver.wait_for_busy(state.driver, polarity: :active_low)
+
+    {:ok, state}
+  end
+
+  defp ensure_state(state, mode, res) do
+    cond do
+      state.active_state == mode ->
+        state
+
+      mode == :grayscale or state.active_state in [:grayscale, nil] ->
+        # Major mode shift or starting from nil requires full init
+        state = if mode == :grayscale, do: elem(reset(state), 1), else: state
+
+        state = apply_commands(state, Settings.get_init(mode, res))
+        state = apply_lut(state, mode, res)
+        %{state | active_state: mode}
+
+      true ->
+        # B&W mode shift usually only requires a LUT update
+        state = apply_lut(state, mode, res)
+        %{state | active_state: mode}
+    end
+  end
+
+  defp apply_commands(state, commands) do
     for {reg, data} <- commands do
       SpiDriver.write(state.driver, reg, data)
     end
 
-    %{state | current_mode: mode, current_lut: nil}
+    state
   end
 
-  defp load_lut(state, mode, resolution) do
+  defp apply_lut(state, mode, resolution) do
     lut_data = Settings.get_lut(mode, resolution)
 
     if lut_data do
@@ -118,19 +147,19 @@ defmodule EInk.Driver.UC8253C do
       SpiDriver.write(state.driver, 0x21, lut_map[0x21])
       SpiDriver.write(state.driver, 0x24, lut_map[0x24])
 
-      {reg22, reg23, new_lut_flag} =
-        if state.lut_flag == 0 do
-          {0x22, 0x23, 1}
+      {active_reg_addr, inactive_reg_addr, next_reg} =
+        if state.active_lut_reg == :reg_0x22 do
+          {0x22, 0x23, :reg_0x23}
         else
-          {0x23, 0x22, 0}
+          {0x23, 0x22, :reg_0x22}
         end
 
-      SpiDriver.write(state.driver, reg22, lut_map[0x22])
-      SpiDriver.write(state.driver, reg23, lut_map[0x23])
+      SpiDriver.write(state.driver, active_reg_addr, lut_map[0x22])
+      SpiDriver.write(state.driver, inactive_reg_addr, lut_map[0x23])
 
-      %{state | lut_flag: new_lut_flag, current_lut: mode}
+      %{state | active_lut_reg: next_reg}
     else
-      %{state | current_lut: mode}
+      state
     end
   end
 

@@ -107,15 +107,15 @@ defmodule EInk.UtilsTest do
     pixels = <<255, 0, 170, 85, 255, 0, 170, 85>>
     {ch1, ch2} = Utils.pack_grayscale(pixels)
     
-    # White (255): {1, 1}
-    # Black (0): {0, 0}
-    # Light Gray (170): {0, 1}
-    # Dark Gray (85): {1, 0}
+    # White (255): {0, 0}
+    # Black (0): {1, 1}
+    # Light Gray (170): {1, 0}
+    # Dark Gray (85): {0, 1}
     
-    # ch1: 1 0 0 1 1 0 0 1 = 0x99
-    # ch2: 1 0 1 0 1 0 1 0 = 0xAA
+    # ch1: 0 1 1 0 0 1 1 0 = 0x66
+    # ch2: 0 1 0 1 0 1 0 1 = 0x55
     
-    assert ch1 == <<0x99>>
-    assert ch2 == <<0xAA>>
+    assert ch1 == <<0x66>>
+    assert ch2 == <<0x55>>
   end
 end
