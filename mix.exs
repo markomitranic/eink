@@ -21,9 +21,10 @@ defmodule Eink.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:circuits_spi, "~> 2.0"},
-      {:circuits_gpio, "~> 2.0"},
-      {:dither, "~> 0.2"}
+      {:circuits_spi, "~> 2.0", optional: true},
+      {:circuits_gpio, "~> 2.0", optional: true},
+      {:dither, "~> 0.2"},
+      {:plug, "~> 1.19", optional: true}
     ]
   end
 end

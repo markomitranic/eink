@@ -21,7 +21,7 @@ defmodule EInk.Utils do
         |> pack_bw()
 
       :grayscale ->
-        dither = if dither_enabled?, do: Dither.dither!(dither, bit_depth: 3), else: dither
+        dither = if dither_enabled?, do: Dither.dither!(dither, bit_depth: 2), else: dither
 
         dither
         |> Dither.to_raw!()
