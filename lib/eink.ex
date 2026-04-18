@@ -6,7 +6,7 @@ defmodule EInk do
 
   require Logger
 
-  defstruct [:driver_mod, :driver_state, :width, :height, :palette]
+  defstruct [:driver_mod, :driver_state, :width, :height, :palette, :orientation, :dither]
 
   # Public API
 
@@ -43,6 +43,8 @@ defmodule EInk do
     width = Keyword.fetch!(config, :width)
     height = Keyword.fetch!(config, :height)
     palette = Keyword.get(config, :palette, :bw)
+    orientation = Keyword.get(config, :orientation, 0)
+    dither = Keyword.get(config, :dither, true)
     driver_config = Keyword.get(config, :driver_config, [])
 
     {:ok, driver_state} = driver_mod.new(driver_config)
@@ -52,7 +54,9 @@ defmodule EInk do
       driver_state: driver_state,
       width: width,
       height: height,
-      palette: palette
+      palette: palette,
+      orientation: orientation,
+      dither: dither
     }
 
     # Initialize the hardware
@@ -69,6 +73,11 @@ defmodule EInk do
     # Resolve mode: default to :full
     mode = Keyword.get(opts, :mode, :full)
 
+    # Merge state defaults with call-time overrides
+    opts =
+      [orientation: state.orientation, dither: state.dither]
+      |> Keyword.merge(opts)
+
     # Preprocess image into binary or %Dither{}
     processed =
       case image do
@@ -78,10 +87,10 @@ defmodule EInk do
         {:file, path} ->
           path
           |> Dither.load!()
-          |> preprocess_dither(state)
+          |> preprocess_dither(state, opts)
 
         %Dither{} = dither ->
-          preprocess_dither(dither, state)
+          preprocess_dither(dither, state, opts)
 
         other ->
           raise "Unsupported image type for EInk.draw: #{inspect(other)}"
@@ -103,6 +112,11 @@ defmodule EInk do
     mode = Keyword.get(opts, :mode, :full)
     num_pixels = state.width * state.height
 
+    # Merge state defaults with call-time overrides
+    opts =
+      [orientation: state.orientation, dither: state.dither]
+      |> Keyword.merge(opts)
+
     # For clear, we generate raw binaries based on mode
     data =
       case mode do
@@ -111,6 +125,9 @@ defmodule EInk do
           val = if color == :white, do: 255, else: 0
           raw = :binary.copy(<<val>>, num_pixels)
           Dither.from_raw!(raw, state.width, state.height)
+          # We don't apply orientation to clear for now as per previous instruction refinement,
+          # but we need to pass opts for dither control if to_packed_binary is called eventually.
+          # (Actually to_packed_binary is called in the driver)
 
         _ ->
           num_bytes = div(num_pixels, 8)
@@ -147,10 +164,19 @@ defmodule EInk do
     {:reply, %{width: state.width, height: state.height, palette: state.palette}, state}
   end
 
-  defp preprocess_dither(dither, state) do
-    dither
-    |> Dither.resize!(state.width, state.height)
-    |> Dither.grayscale!()
+  defp preprocess_dither(dither, state, opts) do
+    dither =
+      dither
+      |> Dither.resize!(state.width, state.height)
+      |> Dither.grayscale!()
+
+    orientation = Keyword.get(opts, :orientation, state.orientation)
+
+    if orientation != 0 do
+      Dither.rotate!(dither, orientation)
+    else
+      dither
+    end
   end
 
   @impl true

@@ -58,7 +58,7 @@ defmodule EInk.Driver.UC8276 do
     # Convert %Dither{} to packed binary or planar tuple if needed
     data =
       case image do
-        %Dither{} = dither -> EInk.Utils.to_packed_binary(dither, mode)
+        %Dither{} = dither -> EInk.Utils.to_packed_binary(dither, mode, opts)
         binary when is_binary(binary) -> binary
       end
 

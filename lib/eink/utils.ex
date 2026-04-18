@@ -7,18 +7,23 @@ defmodule EInk.Utils do
   Dithers and packs a %Dither{} struct into a binary based on the mode.
   - `:full` / `:fast`: Returns a 1-bit packed binary.
   - `:grayscale`: Returns a tuple of two 1-bit planar binaries {ch1, ch2}.
+  Can skip dithering if `dither: false` is passed in `opts`.
   """
-  def to_packed_binary(%Dither{} = dither, mode) do
+  def to_packed_binary(%Dither{} = dither, mode, opts \\ []) do
+    dither_enabled? = Keyword.get(opts, :dither, true)
+
     case mode do
       m when m in [:full, :fast] ->
+        dither = if dither_enabled?, do: Dither.dither!(dither, bit_depth: 1), else: dither
+
         dither
-        |> Dither.dither!(bit_depth: 1)
         |> Dither.to_raw!()
         |> pack_bw()
 
       :grayscale ->
+        dither = if dither_enabled?, do: Dither.dither!(dither, bit_depth: 3), else: dither
+
         dither
-        |> Dither.dither!(bit_depth: 3)
         |> Dither.to_raw!()
         |> pack_grayscale()
     end

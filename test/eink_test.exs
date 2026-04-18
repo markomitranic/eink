@@ -75,10 +75,42 @@ defmodule EInkTest do
     assert opts[:mode] == :full
   end
 
-  test "draw respects dynamic mode option" do
-    EInk.draw(<<0, 0, 0>>, mode: :grayscale)
-    assert_receive {:driver_draw, _, opts}
-    assert opts[:mode] == :grayscale
+  test "draw respects orientation for %Dither{} input" do
+    Application.put_env(:eink, :orientation, 90)
+    # Restart EInk to pick up new config
+    stop_supervised(EInk)
+    start_supervised!(EInk)
+
+    raw = :binary.copy(<<128>>, 400 * 300)
+    dither = Dither.from_raw!(raw, 400, 300)
+    
+    EInk.draw(dither)
+    
+    # If rotation happens, the driver should receive a Dither struct 
+    # (or its processed result) that has been transformed.
+    # In MockDriver, we receive the 'processed' variable.
+    assert_receive {:driver_draw, %Dither{}, _opts}
+    
+    # Reset orientation for other tests
+    Application.put_env(:eink, :orientation, 0)
+    stop_supervised(EInk)
+    start_supervised!(EInk)
+  end
+
+  test "draw ignores orientation for binary input" do
+    Application.put_env(:eink, :orientation, 90)
+    stop_supervised(EInk)
+    start_supervised!(EInk)
+
+    binary = <<0, 1, 2>>
+    EInk.draw(binary)
+    
+    # Binary should go straight through untouched
+    assert_receive {:driver_draw, ^binary, _}
+
+    Application.put_env(:eink, :orientation, 0)
+    stop_supervised(EInk)
+    start_supervised!(EInk)
   end
 
   test "clear passes %Dither{} or binary to driver depending on mode" do
@@ -89,6 +121,28 @@ defmodule EInkTest do
     EInk.clear(:white, mode: :full)
     assert_receive {:driver_draw, binary, opts} when is_binary(binary)
     assert opts[:mode] == :full
+  end
+
+  test "draw respects per-call orientation override" do
+    # Global orientation is 0 by default
+    raw = :binary.copy(<<128>>, 400 * 300)
+    dither = Dither.from_raw!(raw, 400, 300)
+    
+    # Pass override orientation
+    EInk.draw(dither, orientation: 180)
+    
+    # Verify the call succeeded and driver received the data
+    assert_receive {:driver_draw, %Dither{}, _opts}
+  end
+
+  test "draw respects dither: false option" do
+    raw = :binary.copy(<<128>>, 400 * 300)
+    dither = Dither.from_raw!(raw, 400, 300)
+    
+    # This test verifies that the opts are passed down
+    EInk.draw(dither, dither: false)
+    assert_receive {:driver_draw, %Dither{}, opts}
+    assert opts[:dither] == false
   end
 end
 

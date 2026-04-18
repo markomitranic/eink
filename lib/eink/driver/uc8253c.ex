@@ -63,7 +63,7 @@ defmodule EInk.Driver.UC8253C do
     # Pre-process data
     data =
       case image do
-        %Dither{} = dither -> EInk.Utils.to_packed_binary(dither, mode)
+        %Dither{} = dither -> EInk.Utils.to_packed_binary(dither, mode, opts)
         binary when is_binary(binary) -> binary
       end
 
