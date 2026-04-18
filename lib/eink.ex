@@ -6,7 +6,7 @@ defmodule EInk do
 
   require Logger
 
-  defstruct [:driver_mod, :driver_state, :width, :height, :palette, :orientation, :dither]
+  defstruct [:driver_mod, :driver_state, :width, :height, :orientation, :dither]
 
   # Public API
 
@@ -42,7 +42,6 @@ defmodule EInk do
     driver_mod = Keyword.fetch!(config, :driver)
     width = Keyword.fetch!(config, :width)
     height = Keyword.fetch!(config, :height)
-    palette = Keyword.get(config, :palette, :bw)
     orientation = Keyword.get(config, :orientation, 0)
     dither = Keyword.get(config, :dither, true)
     driver_config = Keyword.get(config, :driver_config, [])
@@ -54,7 +53,6 @@ defmodule EInk do
       driver_state: driver_state,
       width: width,
       height: height,
-      palette: palette,
       orientation: orientation,
       dither: dither
     }
@@ -158,7 +156,7 @@ defmodule EInk do
 
   @impl true
   def handle_call(:capabilities, _from, state) do
-    {:reply, %{width: state.width, height: state.height, palette: state.palette}, state}
+    {:reply, %{width: state.width, height: state.height}, state}
   end
 
   defp preprocess_dither(dither, state, opts) do

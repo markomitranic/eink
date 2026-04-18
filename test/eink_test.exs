@@ -35,7 +35,6 @@ defmodule EInkTest do
     Application.put_env(:eink, :driver, EInk.MockDriver)
     Application.put_env(:eink, :width, 400)
     Application.put_env(:eink, :height, 300)
-    Application.put_env(:eink, :palette, :bw)
     Application.put_env(:eink, :driver_config, [
       test_pid: self()
     ])
@@ -44,7 +43,6 @@ defmodule EInkTest do
       Application.delete_env(:eink, :driver)
       Application.delete_env(:eink, :width)
       Application.delete_env(:eink, :height)
-      Application.delete_env(:eink, :palette)
       Application.delete_env(:eink, :driver_config)
     end)
 
@@ -52,11 +50,10 @@ defmodule EInkTest do
     :ok
   end
 
-  test "capabilities returns configured dimensions and palette" do
+  test "capabilities returns configured dimensions" do
     caps = EInk.capabilities()
     assert caps.width == 400
     assert caps.height == 300
-    assert caps.palette == :bw
   end
 
   test "draw passes %Dither{} to driver for non-binary input" do
