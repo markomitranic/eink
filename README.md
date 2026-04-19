@@ -1,15 +1,17 @@
 # EInk
 
+Draw images to e-ink displays with Elixir.
+
 ## Motivation
 
-E-Ink displays offer a unique set of challenges and opportunities for embedded
-systems. Their high contrast, low power consumption, and paper-like readability
-make them ideal for dashboards, labels, and slow-refresh interfaces. However,
-interacting with these displays often involves low-level SPI communication,
-complex look-up tables (LUTs), and specific pixel-packing requirements. This
-library aims to provide a high-level, idiomatic Elixir interface that abstracts
-away these hardware details, allowing developers to focus on building beautiful,
-efficient interfaces.
+This package was developed to provide a unified API for drawing images to EInk
+displays. Originally created for the
+[Goatmire 2025 name badge](https://github.com/protolux-electronics/name_badge),
+development is now primarily in support of the project that grew out of that -
+the [Nerves Starter Kit](https://github.com/protolux-electronics/nsk). However,
+I'm happy to add support for any alternative displays, not just the ones used in
+these projects. Feel free to open an issue or get in contact for more
+information.
 
 ## Usage
 
@@ -32,7 +34,9 @@ config :eink,
   ]
 ```
 
-After adding configuration, add `EInk` to your application's supervision tree:
+After adding configuration, add `EInk` to your application's supervision tree.
+You can alternatively override the application config by passing the config to
+the `start_link` function instead:
 
 ```elixir
 def start(_type, _args) do
