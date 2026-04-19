@@ -8,37 +8,91 @@ defmodule EInk do
 
   defstruct [:driver_mod, :driver_state, :width, :height, :orientation, :dither]
 
+  @type image_input :: {:file, Path.t()} | binary() | %Dither{}
+  @type draw_opts :: [
+          mode: :full | :fast | :grayscale,
+          orientation: 0 | 90 | 180 | 270,
+          dither: boolean()
+        ]
+
   # Public API
 
+  @doc """
+  Starts the EInk GenServer.
+
+  Options passed here override global application configuration.
+  """
+  @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts \\ []) do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
   end
 
+  @doc """
+  Draws an image file from the given path.
+  """
+  @spec draw_file(Path.t(), draw_opts()) :: :ok | {:error, :file_not_found}
+  def draw_file(path, opts \\ []) do
+    if File.exists?(path) do
+      path
+      |> Dither.load!()
+      |> draw(opts)
+    else
+      {:error, :file_not_found}
+    end
+  end
+
+  @doc """
+  Draws the provided image to the display.
+
+  The image can be a raw (packed) binary or a `%Dither{}` struct.
+  """
+  @spec draw(image_input(), draw_opts()) :: :ok
   def draw(image, opts \\ []) do
     GenServer.call(__MODULE__, {:draw, image, opts})
   end
 
+  @doc """
+  Clears the screen to the specified color (defaults to `:white`).
+  """
+  @spec clear(:white | :black, draw_opts()) :: :ok
   def clear(color \\ :white, opts \\ []) do
     GenServer.call(__MODULE__, {:clear, color, opts})
   end
 
+  @doc """
+  Puts the display driver into deep sleep mode to save power.
+  """
+  @spec sleep() :: :ok
   def sleep() do
     GenServer.call(__MODULE__, :sleep)
   end
 
+  @doc """
+  Wakes the display driver from deep sleep mode.
+  """
+  @spec wake() :: :ok
   def wake() do
     GenServer.call(__MODULE__, :wake)
   end
 
+  @doc """
+  Returns the current capabilities and configuration of the display.
+  """
+  @spec capabilities() :: %{width: integer(), height: integer()}
   def capabilities() do
     GenServer.call(__MODULE__, :capabilities)
   end
 
   # GenServer Callbacks
 
+  @doc false
   @impl true
-  def init(_opts) do
-    config = Application.get_all_env(:eink)
+  def init(opts) do
+    # Merge global application env with local opts (passed to start_link)
+    config =
+      Application.get_all_env(:eink)
+      |> Keyword.merge(opts)
+
     driver_mod = Keyword.fetch!(config, :driver)
     width = Keyword.fetch!(config, :width)
     height = Keyword.fetch!(config, :height)
@@ -66,6 +120,7 @@ defmodule EInk do
     {:ok, %{state | driver_state: driver_state}}
   end
 
+  @doc false
   @impl true
   def handle_call({:draw, image, opts}, _from, state) do
     # Resolve mode: default to :full
@@ -81,11 +136,6 @@ defmodule EInk do
       case image do
         binary when is_binary(binary) ->
           binary
-
-        {:file, path} ->
-          path
-          |> Dither.load!()
-          |> preprocess_dither(state, opts)
 
         %Dither{} = dither ->
           preprocess_dither(dither, state, opts)
@@ -105,6 +155,7 @@ defmodule EInk do
     {:reply, :ok, %{state | driver_state: driver_state}}
   end
 
+  @doc false
   @impl true
   def handle_call({:clear, color, opts}, _from, state) do
     mode = Keyword.get(opts, :mode, :full)
@@ -142,23 +193,27 @@ defmodule EInk do
     {:reply, :ok, %{state | driver_state: driver_state}}
   end
 
+  @doc false
   @impl true
   def handle_call(:sleep, _from, state) do
     {:ok, driver_state} = state.driver_mod.sleep(state.driver_state)
     {:reply, :ok, %{state | driver_state: driver_state}}
   end
 
+  @doc false
   @impl true
   def handle_call(:wake, _from, state) do
     {:ok, driver_state} = state.driver_mod.wake(state.driver_state)
     {:reply, :ok, %{state | driver_state: driver_state}}
   end
 
+  @doc false
   @impl true
   def handle_call(:capabilities, _from, state) do
     {:reply, %{width: state.width, height: state.height}, state}
   end
 
+  @doc false
   defp preprocess_dither(dither, state, opts) do
     orientation = Keyword.get(opts, :orientation, state.orientation)
 
@@ -168,12 +223,15 @@ defmodule EInk do
     |> Dither.grayscale!()
   end
 
+  @doc false
   defp maybe_rotate(dither, 0), do: dither
 
+  @doc false
   defp maybe_rotate(dither, orientation) when orientation in [90, 180, 270] do
     Dither.rotate!(dither, orientation)
   end
 
+  @doc false
   @impl true
   def terminate(_reason, state) do
     if state.driver_mod && state.driver_state do

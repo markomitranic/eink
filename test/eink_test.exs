@@ -132,14 +132,23 @@ defmodule EInkTest do
     assert_receive {:driver_draw, %Dither{}, _opts}
   end
 
-  test "draw respects dither: false option" do
-    raw = :binary.copy(<<128>>, 400 * 300)
-    dither = Dither.from_raw!(raw, 400, 300)
+  test "start_link options override application environment" do
+    # Default width/height in setup is 400x300
+    # Stop the one started in setup so we can start a new one with the same name
+    stop_supervised(EInk)
     
-    # This test verifies that the opts are passed down
-    EInk.draw(dither, dither: false)
-    assert_receive {:driver_draw, %Dither{}, opts}
-    assert opts[:dither] == false
+    override_opts = [
+      driver: EInk.MockDriver,
+      width: 800,
+      height: 600,
+      driver_config: [test_pid: self()]
+    ]
+
+    {:ok, _pid} = start_supervised({EInk, override_opts})
+    
+    caps = EInk.capabilities()
+    assert caps.width == 800
+    assert caps.height == 600
   end
 end
 

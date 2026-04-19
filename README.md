@@ -13,11 +13,15 @@ I'm happy to add support for any alternative displays, not just the ones used in
 these projects. Feel free to open an issue or get in contact for more
 information.
 
-## Usage
+## Configuration and Startup
 
-To get started, configure the library in your application environment. You will
-need to specify your display dimensions and the driver module matching your
-hardware.
+EInk can be configured either through your application's `config/config.exs` or
+by passing options directly when starting the process.
+
+### Application Configuration
+
+To use the global application configuration, add the following to your
+`config.exs`:
 
 ```elixir
 config :eink,
@@ -34,20 +38,40 @@ config :eink,
   ]
 ```
 
-After adding configuration, add `EInk` to your application's supervision tree.
-You can alternatively override the application config by passing the config to
-the `start_link` function instead:
+Then add `EInk` to your application's supervision tree:
 
 ```elixir
 def start(_type, _args) do
   children = [
-    # Other children here
     EInk
   ]
 
   opts = [strategy: :one_for_one, name: MyApp.Supervisor]
   Supervisor.start_link(children, opts)
 end
+```
+
+### Manual Startup
+
+If you want to start the driver manually with specific settings, you can pass
+the configuration directly to `start_link/1`. Options passed here will override
+any global application environment settings.
+
+```elixir
+EInk.start_link(
+  driver: EInk.Driver.Virtual,
+  width: 800,
+  height: 480
+)
+```
+
+You can also use this approach in a supervision tree by passing the options to
+the child spec:
+
+```elixir
+children = [
+  {EInk, [width: 400, height: 300]}
+]
 ```
 
 ### Common Functions
