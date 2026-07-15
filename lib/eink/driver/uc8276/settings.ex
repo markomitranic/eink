@@ -2,7 +2,22 @@ defmodule EInk.Driver.UC8276.Settings do
   @behaviour EInk.Driver.Settings
 
   @impl true
-  def get_init(:grayscale, {400, 300}), do: []
+  # The :full init at 150Hz (0x30): gray levels are placed by counting drive
+  # frames, so a 3x frame rate gives 3x finer placement per refresh.
+  def get_init(:grayscale, {400, 300}) do
+    [
+      {0x00, <<0x3F, 0x4D>>},
+      {0x01, <<0x03, 0x10, 0x3F, 0x3F, 0x03>>},
+      {0x06, <<0x96, 0x96, 0x29>>},
+      {0x30, <<0x1A>>},
+      {0x61, <<0x01, 0x90, 0x01, 0x2C>>},
+      {0x82, <<0x05>>},
+      {0x50, <<0x97>>},
+      {0x60, <<0x22>>},
+      {0xE3, <<0x88>>},
+      {0x41, <<0x00>>}
+    ]
+  end
 
   def get_init(mode, {400, 300}) when mode in [:full, :fast] do
     [
@@ -24,6 +39,20 @@ defmodule EInk.Driver.UC8276.Settings do
   end
 
   @impl true
+  # Register waveform for panels with no factory 4-gray OTP (TWE0420NQN30).
+  # Per pixel: drive to black 63 frames, then whiten 0/5/10/54 frames for
+  # black/dark/light/white (0x21..0x24). Mids are calibrated to the linear
+  # reflectance of sRGB 85/170, so 2-bit dithered images render tone-correct.
+  def get_lut(:grayscale, _resolution) do
+    [
+      {0x20, <<0x01, 0x3F, 0x02, 0x36, 0x00, 0x01, 0x01>> <> :binary.copy(<<0x00>>, 35)},
+      {0x21, <<0x01, 0x7F, 0x02, 0x80, 0x00, 0x01, 0x01>> <> :binary.copy(<<0x00>>, 35)},
+      {0x22, <<0x01, 0x7F, 0x02, 0x85, 0x00, 0x01, 0x01>> <> :binary.copy(<<0x00>>, 35)},
+      {0x23, <<0x01, 0x7F, 0x02, 0x8A, 0x00, 0x01, 0x01>> <> :binary.copy(<<0x00>>, 35)},
+      {0x24, <<0x01, 0x7F, 0x02, 0xB6, 0x00, 0x01, 0x01>> <> :binary.copy(<<0x00>>, 35)}
+    ]
+  end
+
   def get_lut(:full, _resolution) do
     [
       {0x20, <<0x01, 0x14, 0x0A, 0x14, 0x00, 0x01, 0x01>> <> :binary.copy(<<0x00>>, 35)},
